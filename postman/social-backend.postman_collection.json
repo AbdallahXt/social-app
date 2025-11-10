@@ -21,38 +21,154 @@
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
             "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api","auth","register"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user1@test.com\",\n  \"password\": \"password123\",\n  \"name\": \"User1\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"User Name\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Register a new user. Returns access token, refresh token, user data, and sends OTP code to email."
           }
         },
         {
-          "name": "Login (rate-limited)",
+          "name": "Login",
           "request": {
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
             "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user1@test.com\",\n  \"password\": \"password123\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Login with email and password. Returns access token and refresh token."
           }
         },
         {
-          "name": "Refresh",
+          "name": "Google Sign In",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/google", "host": ["{{baseUrl}}"], "path": ["api","auth","google"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"GOOGLE_ID_TOKEN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
           "request": {
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
             "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api","auth","refresh"] },
-            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"<paste refresh>\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
           }
         },
         {
-          "name": "Password: Update",
+          "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
-            "url": { "raw": "{{baseUrl}}/api/auth/password", "host": ["{{baseUrl}}"], "path": ["api","auth","password"] },
-            "body": { "mode": "raw", "raw": "{\n  \"oldPassword\": \"password123\",\n  \"newPassword\": \"newpass123\"\n}" }
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","auth","logout"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
           }
         },
         {
-          "name": "2FA: Setup",
+          "name": "Update Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/password", "host": ["{{baseUrl}}"], "path": ["api","auth","password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"password123\",\n  \"newPassword\": \"newpassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Email Verification - Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/resend-verification", "host": ["{{baseUrl}}"], "path": ["api","auth","resend-verification"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Resend OTP code to email. No token required."
+          }
+        },
+        {
+          "name": "Email Verification - Verify with OTP",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/verify-email-otp", "host": ["{{baseUrl}}"], "path": ["api","auth","verify-email-otp"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Verify email with OTP code. No token required."
+          }
+        },
+        {
+          "name": "Email Verification - Verify with Token (Legacy)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-signup?token=YOUR_TOKEN",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","auth","verify-signup"],
+              "query": [
+                { "key": "token", "value": "YOUR_TOKEN", "description": "Token from email verification link" }
+              ]
+            },
+            "description": "Legacy token-based verification. Use OTP method instead."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/forgot", "host": ["{{baseUrl}}"], "path": ["api","auth","forgot"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/reset", "host": ["{{baseUrl}}"], "path": ["api","auth","reset"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"RESET_TOKEN\",\n  \"newPassword\": \"newpassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "2FA - Setup",
           "request": {
             "method": "POST",
             "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ],
@@ -60,30 +176,128 @@
           }
         },
         {
-          "name": "2FA: Enable",
+          "name": "2FA - Enable",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "url": { "raw": "{{baseUrl}}/api/auth/2fa/enable", "host": ["{{baseUrl}}"], "path": ["api","auth","2fa","enable"] },
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
           }
         },
         {
-          "name": "2FA: Disable",
+          "name": "2FA - Disable",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "url": { "raw": "{{baseUrl}}/api/auth/2fa/disable", "host": ["{{baseUrl}}"], "path": ["api","auth","2fa","disable"] },
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
           }
         },
         {
-          "name": "Email: Request Update",
+          "name": "Email Update - Request",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "url": { "raw": "{{baseUrl}}/api/auth/email/update-request", "host": ["{{baseUrl}}"], "path": ["api","auth","email","update-request"] },
-            "body": { "mode": "raw", "raw": "{\n  \"newEmail\": \"new@example.com\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newEmail\": \"new@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Email Update - Verify",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/email/verify?token=YOUR_TOKEN",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","auth","email","verify"],
+              "query": [
+                { "key": "token", "value": "YOUR_TOKEN", "description": "Token from email change link" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Email 2FA - Request",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/email-2fa/request", "host": ["{{baseUrl}}"], "path": ["api","auth","email-2fa","request"] }
+          }
+        },
+        {
+          "name": "Email 2FA - Enable",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/email-2fa/enable", "host": ["{{baseUrl}}"], "path": ["api","auth","email-2fa","enable"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Email 2FA - Disable",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/email-2fa/disable", "host": ["{{baseUrl}}"], "path": ["api","auth","email-2fa","disable"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Get Sessions",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/sessions", "host": ["{{baseUrl}}"], "path": ["api","auth","sessions"] }
+          }
+        },
+        {
+          "name": "Revoke Session",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/sessions/:sessionId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","auth","sessions",":sessionId"],
+              "variable": [
+                { "key": "sessionId", "value": "SESSION_ID" }
+              ]
+            }
           }
         }
       ]

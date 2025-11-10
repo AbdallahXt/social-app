@@ -14,6 +14,8 @@ export interface IUser extends Document {
   emailVerified: boolean;
   emailVerifyToken?: string;
   emailVerifyExpires?: Date;
+  emailVerifyOTPCodeHash?: string;
+  emailVerifyOTPExpires?: Date;
   // Google OAuth
   googleId?: string;
   // email change
@@ -49,6 +51,8 @@ const UserSchema = new Schema<IUser>(
     emailVerified: { type: Boolean, default: false },
     emailVerifyToken: String,
     emailVerifyExpires: Date,
+    emailVerifyOTPCodeHash: String,
+    emailVerifyOTPExpires: Date,
     googleId: { type: String, unique: true, sparse: true, index: true }, // Sparse index allows multiple nulls
     emailChangeToken: String,
     emailChangeNewEmail: String,

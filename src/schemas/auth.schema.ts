@@ -77,6 +77,13 @@ export const verifySignupQuerySchema = {
   query: z.object({ token: z.string({ required_error: msg('token is required', 'الرمز مطلوب') }).min(20) })
 };
 
+export const verifyEmailOTPSchema = {
+  body: z.object({
+    email: z.string({ required_error: msg('Email is required', 'البريد الإلكتروني مطلوب') }).email(msg('Invalid email', 'بريد إلكتروني غير صالح')),
+    otp: z.string({ required_error: msg('OTP code is required', 'رمز التحقق مطلوب') }).length(6, msg('OTP must be 6 digits', 'يجب أن يكون رمز التحقق 6 أرقام'))
+  })
+};
+
 // Password reset
 export const forgotPasswordSchema = {
   body: z.object({

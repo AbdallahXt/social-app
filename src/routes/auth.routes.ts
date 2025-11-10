@@ -14,6 +14,7 @@ import {
   verifyEmailUpdate,
   resendVerification,
   verifySignup,
+  verifyEmailOTP,
   forgotPassword,
   resetPassword,
   requestEmail2FASetup,
@@ -23,7 +24,7 @@ import {
   getSessions,
   revokeSession
 } from '../controllers/auth.controller';
-import { registerSchema, loginSchema, refreshSchema, updatePasswordSchema, enable2FASchema, disable2FASchema, requestEmailUpdateSchema, verifyEmailQuerySchema, resendVerificationSchema, verifySignupQuerySchema, forgotPasswordSchema, resetPasswordSchema, requestEmail2FASetupSchema, enableEmail2FASchema, disableEmail2FASchema, googleSignInSchema } from '../schemas/auth.schema';
+import { registerSchema, loginSchema, refreshSchema, updatePasswordSchema, enable2FASchema, disable2FASchema, requestEmailUpdateSchema, verifyEmailQuerySchema, resendVerificationSchema, verifySignupQuerySchema, verifyEmailOTPSchema, forgotPasswordSchema, resetPasswordSchema, requestEmail2FASetupSchema, enableEmail2FASchema, disableEmail2FASchema, googleSignInSchema } from '../schemas/auth.schema';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.post('/password', requireAuth, validate(updatePasswordSchema), updatePass
 
 // Signup verification
 router.post('/resend-verification', validate(resendVerificationSchema), resendVerification);
+router.post('/verify-email-otp', validate(verifyEmailOTPSchema), verifyEmailOTP);
 router.get('/verify-signup', validate(verifySignupQuerySchema), verifySignup);
 
 // Forgot/Reset password

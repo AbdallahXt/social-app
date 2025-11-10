@@ -21,23 +21,110 @@ function genBackupCodes(n = 10) {
 }
 
 export async function register(req: Request, res: Response) {
-  const { email, password, name } = req.body;
-  const exists = await User.findOne({ email });
-  if (exists) return res.status(409).json({ error: 'Email already registered' });
-  const passwordHash = await hashPassword(password);
-  const tokenPlain = crypto.randomBytes(24).toString('hex');
-  const tokenHash = await bcrypt.hash(tokenPlain, 10);
-  const user = await User.create({
-    email,
-    passwordHash,
-    name,
-    emailVerified: false,
-    emailVerifyToken: tokenHash,
-    emailVerifyExpires: addMs(new Date(), 1000 * 60 * 60 * 24)
-  });
-  const verifyUrl = `${env.clientUrl}/verify-email?token=${tokenPlain}`;
-  await sendEmail({ to: email, subject: 'Verify your email', template: 'verify-email', context: { verifyUrl }, tags: ['signup'] });
-  return res.status(201).json({ status: 'verify_email_sent' });
+  try {
+    const { email, password, name } = req.body;
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(409).json({ error: 'Email already registered' });
+    
+    const passwordHash = await hashPassword(password);
+    const tokenPlain = crypto.randomBytes(24).toString('hex');
+    const tokenHash = await bcrypt.hash(tokenPlain, 10);
+    
+    // Generate OTP code (6 digits)
+    const otpCode = (Math.floor(100000 + Math.random() * 900000)).toString();
+    const otpCodeHash = await bcrypt.hash(otpCode, 10);
+    
+    const user = await User.create({
+      email,
+      passwordHash,
+      name,
+      emailVerified: false,
+      emailVerifyToken: tokenHash,
+      emailVerifyExpires: addMs(new Date(), 1000 * 60 * 60 * 24),
+      emailVerifyOTPCodeHash: otpCodeHash,
+      emailVerifyOTPExpires: addMs(new Date(), 1000 * 60 * 10) // 10 minutes
+    });
+    
+    // Generate tokens FIRST (before email) to ensure they're always created
+    const jti = generateJti();
+    const accessToken = signAccessToken({ id: user.id, role: user.role, email: user.email });
+    const refreshToken = signRefreshToken({ id: user.id, role: user.role, email: user.email }, jti);
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    const hashedAccessToken = await bcrypt.hash(accessToken, 10);
+    const refreshExpiresAt = addMs(new Date(), parseDurationToMs(env.jwtRefreshExpiresIn));
+    const accessExpiresAt = addMs(new Date(), parseDurationToMs(env.jwtAccessExpiresIn));
+    
+    try {
+      await RefreshToken.create({ user: user._id, jti, hashedToken: hashedRefreshToken, expiresAt: refreshExpiresAt, revoked: false });
+    } catch (tokenError) {
+      console.error('Failed to create refresh token:', tokenError);
+      // Delete user if token creation fails to avoid orphaned records
+      await User.findByIdAndDelete(user._id);
+      return res.status(500).json({ error: 'Failed to create session' });
+    }
+    
+    // Save session data with both tokens (non-critical, continue if fails)
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+    try {
+      await Session.create({
+        user: user._id,
+        authMethod: 'password',
+        accessToken: hashedAccessToken,
+        refreshTokenJti: jti,
+        expiresAt: accessExpiresAt,
+        deviceInfo: {
+          userAgent,
+          ipAddress: ipAddress.toString()
+        },
+        isActive: true,
+        lastActivity: new Date(),
+        loginAttempt: {
+          success: true,
+          timestamp: new Date()
+        }
+      });
+    } catch (sessionError) {
+      console.error('Failed to create session:', sessionError);
+      // Continue anyway - session is not critical for registration
+    }
+    
+    // Send OTP code via email (non-blocking - don't fail registration if email fails)
+    try {
+      await sendEmail({ 
+        to: email, 
+        subject: 'Verify your email - OTP Code', 
+        template: 'email-2fa-code', 
+        context: { code: otpCode }, 
+        tags: ['signup', 'otp'] 
+      });
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Continue with registration even if email fails - user can resend OTP
+    }
+    
+    // Reload user to get createdAt
+    const userWithTimestamps = await User.findById(user._id);
+    
+    return res.status(201).json({ 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name, 
+        emailVerified: user.emailVerified,
+        createdAt: userWithTimestamps?.createdAt || user.createdAt
+      },
+      tokens: { accessToken, refreshToken },
+      status: 'verify_email_sent',
+      message: 'OTP code sent to your email'
+    });
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    // If response already sent, don't send again
+    if (!res.headersSent) {
+      return res.status(500).json({ error: error.message || 'Registration failed' });
+    }
+  }
 }
 
 export async function login(req: Request, res: Response) {
@@ -292,17 +379,110 @@ export async function verifyEmailUpdate(req: Request, res: Response) {
 }
 
 export async function resendVerification(req: Request, res: Response) {
-  const { email } = req.body as { email: string };
-  const user = await User.findOne({ email });
-  if (!user) return res.status(200).json({ status: 'sent' });
-  if (user.emailVerified) return res.status(200).json({ status: 'already_verified' });
-  const tokenPlain = crypto.randomBytes(24).toString('hex');
-  user.emailVerifyToken = await bcrypt.hash(tokenPlain, 10);
-  user.emailVerifyExpires = addMs(new Date(), 1000 * 60 * 60 * 24);
-  await user.save();
-  const verifyUrl = `${env.clientUrl}/verify-email?token=${tokenPlain}`;
-  await sendEmail({ to: user.email, subject: 'Verify your email', template: 'verify-email', context: { verifyUrl }, tags: ['signup-resend'] });
-  return res.json({ status: 'sent' });
+  try {
+    const { email } = req.body as { email: string };
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return res.status(200).json({ status: 'sent', message: 'If the email exists, an OTP code has been sent' });
+    }
+    
+    if (user.emailVerified) {
+      return res.status(200).json({ status: 'already_verified', message: 'Email is already verified' });
+    }
+    
+    // Generate new OTP code (6 digits)
+    const otpCode = (Math.floor(100000 + Math.random() * 900000)).toString();
+    const otpCodeHash = await bcrypt.hash(otpCode, 10);
+    
+    user.emailVerifyOTPCodeHash = otpCodeHash;
+    user.emailVerifyOTPExpires = addMs(new Date(), 1000 * 60 * 10); // 10 minutes
+    
+    // Also keep token for backward compatibility
+    const tokenPlain = crypto.randomBytes(24).toString('hex');
+    user.emailVerifyToken = await bcrypt.hash(tokenPlain, 10);
+    user.emailVerifyExpires = addMs(new Date(), 1000 * 60 * 60 * 24);
+    
+    await user.save();
+    
+    // Send OTP code via email (non-blocking)
+    try {
+      await sendEmail({ 
+        to: user.email, 
+        subject: 'Verify your email - OTP Code', 
+        template: 'email-2fa-code', 
+        context: { code: otpCode }, 
+        tags: ['signup-resend', 'otp'] 
+      });
+    } catch (emailError) {
+      console.error('Failed to send OTP email:', emailError);
+      // Still return success to not reveal email issues
+    }
+    
+    return res.json({ status: 'sent', message: 'OTP code sent to your email' });
+  } catch (error: any) {
+    console.error('Resend verification error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to resend verification code' });
+  }
+}
+
+export async function verifyEmailOTP(req: Request, res: Response) {
+  try {
+    const { email, otp } = req.body as { email: string; otp: string };
+    
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if email is already verified
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'Email is already verified' });
+    }
+    
+    // Check if OTP exists and is not expired
+    if (!user.emailVerifyOTPCodeHash || !user.emailVerifyOTPExpires) {
+      return res.status(400).json({ error: 'No OTP code found. Please request a new one.' });
+    }
+    
+    if (user.emailVerifyOTPExpires <= new Date()) {
+      return res.status(400).json({ error: 'OTP code has expired. Please request a new one.' });
+    }
+    
+    // Verify OTP code
+    const isValid = await bcrypt.compare(otp, user.emailVerifyOTPCodeHash);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Invalid OTP code' });
+    }
+    
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerifyOTPCodeHash = undefined;
+    user.emailVerifyOTPExpires = undefined;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+    
+    return res.json({ 
+      status: 'verified', 
+      message: 'Email verified successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        emailVerified: user.emailVerified
+      }
+    });
+  } catch (error: any) {
+    console.error('Verify email OTP error:', error);
+    return res.status(500).json({ error: error.message || 'Verification failed' });
+  }
 }
 
 export async function verifySignup(req: Request, res: Response) {
